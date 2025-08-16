@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>🔎 B2 Word Search</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: Arial, sans-serif;
+      background-color: #f0f8ff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    h1 {
+      color: #2a6592;
+      margin-bottom: 5px;
+    }
+    .instructions {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 15px;
+    }
+    #error {
+      color: #d9534f;
+      font-size: 16px;
+      margin-top: 5px;
+    }
+    #grid {
+      margin: 0 auto 15px;
+      border-collapse: collapse;
+    }
+    #grid td {
+      width: 32px;
+      height: 32px;
+      text-align: center;
+      font-size: 20px;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      transition: background 0.2s;
+      user-select: none;
+    }
+    #grid td.selected { background-color: #ffe169; }
+    #grid td.found    { background-color: #90ee90; }
+    .word-list {
+      font-size: 18px;
+      color: #333;
+      max-width: 90%;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .found-word { text-decoration: line-through; color: green; }
+    #victory { font-size: 24px; color: #2a6592; margin-top: 10px; display: none; }
+    input, button { font-size: 16px; margin: 8px; padding: 5px 10px; border-radius: 6px; }
+    footer {
+      font-size: 14px;
+      color: #555;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🔎 B2 Interactive Word Search</h1>
+  <div class="instructions">Select the letters to find all the words!</div>
+
+  <div id="setup">
+    <input type="text" id="words" placeholder="BETTER, WORST, FARTHER, DISCOVERY..." style="width:400px;">
+    <button onclick="generate()">Generate Word Search</button>
+    <div id="error"></div>
+  </div>
+
+  <table id="grid"></table>
+  <div class="word-list" id="wordlist"></div>
+  <div id="victory">🎉 Excellent! You found all the words! 🎉</div>
+
+  <footer>© All rights reserved – YLC 2025</footer>
+
+  <script>
+    let gridData = [], selectedCells = [], isMouseDown = false, words = [], selectionDirection = null;
+    const size = 14;  // bigger grid for B2
+    const directions = [[1,0],[-1,0],[0,1],[0,-1]];
+
+    function generate() {
+      document.getElementById('victory').style.display = 'none';
+      const input = document.getElementById('words').value.toUpperCase();
+      const raw = input.split(',').map(w => w.trim()).filter(Boolean);
+
+      const long = raw.filter(w => w.length > 12);
+      const errorDiv = document.getElementById('error');
+      if (long.length) {
+        errorDiv.textContent = 'These words are too long: ' + long.join(', ') + '. Max 12 letters.';
+        return;
+      }
+      errorDiv.textContent = '';
+      words = raw;
+      if (words.length < 6 || words.length > 12) {
+        errorDiv.textContent = 'Please enter between 6 and 12 words.';
+        return;
+      }
+      document.getElementById('setup').style.display = 'none';
+
+      gridData = Array.from({ length: size }, () => Array(size).fill(''));
+      for (let w of words) {
+        let placed = false;
+        for (let tries = 0; tries < 500 && !placed; tries++) {
+          const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+          const row = Math.floor(Math.random() * size), col = Math.floor(Math.random() * size);
+          if (canPlaceWord(w, row, col, dx, dy)) { placeWord(w, row, col, dx, dy); placed = true; }
+        }
+        if (!placed) { alert(`Could not place "${w}".`); return; }
+      }
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      for (let r=0; r<size; r++) {
+        for (let c=0; c<size; c++) {
+          if (!gridData[r][c]) gridData[r][c] = letters[Math.floor(Math.random()*letters.length)];
+        }
+      }
+      renderGrid();
+      document.getElementById('wordlist').innerHTML = 'Find: ' + words.map(w => `<span id="word-${w}">${w}</span>`).join(', ');
+    }
+
+    function canPlaceWord(w,r,c,dx,dy){
+      for(let i=0;i<w.length;i++){
+        if(r<0||r>=size||c<0||c>=size||gridData[r][c]) return false;
+        r+=dx; c+=dy;
+      }
+      return true;
+    }
+    function placeWord(w,r,c,dx,dy){
+      for(let i=0;i<w.length;i++){
+        gridData[r][c]=w[i]; r+=dx; c+=dy;
+      }
+    }
+    function renderGrid(){
+      const table=document.getElementById('grid'); table.innerHTML='';
+      for(let r=0;r<size;r++){
+        const tr=document.createElement('tr');
+        for(let c=0;c<size;c++){
+          const td=document.createElement('td');
+          td.textContent=gridData[r][c];
+          td.dataset.row=r; td.dataset.col=c;
+          td.addEventListener('mousedown',startSelection);
+          td.addEventListener('mouseover',dragSelection);
+          td.addEventListener('mouseup',endSelection);
+          tr.appendChild(td);
+        }
+        table.appendChild(tr);
+      }
+      document.body.addEventListener('mouseup',()=>isMouseDown=false);
+    }
+    function startSelection(e){clearSelection();isMouseDown=true;selectionDirection=null;selectCell(e.target);}    
+    function dragSelection(e){if(isMouseDown)selectCell(e.target);}    
+    function endSelection(){isMouseDown=false;checkSelection();}
+    function selectCell(cell){
+      if(!cell.dataset.row||cell.classList.contains('selected'))return;
+      const r=+cell.dataset.row,c=+cell.dataset.col;
+      if(selectedCells.length===0){cell.classList.add('selected');selectedCells.push(cell);return;}
+      const fr=+selectedCells[0].dataset.row,fc=+selectedCells[0].dataset.col;
+      const lr=+selectedCells[selectedCells.length-1].dataset.row,lc=+selectedCells[selectedCells.length-1].dataset.col;
+      if(!selectionDirection){
+        const dr=r-fr,dc=c-fc;
+        if((dr===0&&dc!==0)||(dc===0&&dr!==0)){selectionDirection=[Math.sign(dr),Math.sign(dc)];}
+        else return;
+      }
+      const [dx,dy]=selectionDirection;
+      if(r===lr+dx&&c===lc+dy){cell.classList.add('selected');selectedCells.push(cell);}
+    }    
+    function clearSelection(){selectedCells.forEach(c=>c.classList.remove('selected'));selectedCells=[];selectionDirection=null;}    
+    function checkSelection(){
+      if(!selectedCells.length)return;
+      const str=selectedCells.map(c=>c.textContent).join('');
+      const rev=str.split('').reverse().join('');
+      let found=null;
+      if(words.includes(str))found=str;
+      else if(words.includes(rev))found=rev;
+      if(found){
+        selectedCells.forEach(c=>{c.classList.remove('selected');c.classList.add('found');});
+        document.getElementById('word-'+found).classList.add('found-word');
+        checkVictory();
+      } else clearSelection();
+    }
+    function checkVictory(){
+      if(words.every(w=>document.getElementById('word-'+w).classList.contains('found-word'))){
+        document.getElementById('victory').style.display='block';
+      }
+    }
+  </script>
+
+</body>
+</html>
